@@ -1,0 +1,127 @@
+---
+title: "Linear Regression"
+author: "My An Huynh"
+date: "2024-11-07"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Linear models
+
+y = beta0 + beta1x1 + ... + betapxip + ei,ei ~ (0,sigma^2)
+
+Preictors:
+Outcome is continuous; predictors can be anything 
+Continuous predictors are added directly
+Categorical predictors require dummy indicator variables 
+- For each non-reference group, a binary(0/1) variable indicating group membership for each subject is created and used in the model. 
+
+Testing
+- For a single regression coefficient, you can construct a test statistic using t = (beta_hat - beta) / SE(beta) where beta is the null and beta_hat is the estimate. For large samples, this has a standard normal distribution. To test multiple coefficients (i.e those arising from the inclusion of a categorical variable with several predictors) but can use an F-test / ANOVA. 
+
+Diagnostics
+- Many model assumptions (constant variance, model specification) can be examined using residuals
+  - Look at overall distribution (centered at 0? skewed?)
+  - Look at residuals vs predictors (any non-linearity? trends? non-constant residual variance?)
+  - Are there structures in residuals? Have you fit the right trendline? Is there low variance vs high variance on different sides of the fit? 
+  - Departures from these assumptions means that the statistical tests you have done then downstream things/results are also not right. 
+  
+Linear models in R 
+- lm for linear models
+- glm for generalized linear models 
+
+Arguments include
+- formula: y (output) ~ x1 + x2 (list of predictors)
+- data
+
+Output is complex --> Use broom 
+
+
+```{r}
+library(tidyverse)
+library(p8105.datasets)
+```
+
+```{r}
+data("nyc_airbnb")
+
+nyc_airbnb  = 
+  nyc_airbnb |> 
+  mutate(stars = review_scores_location / 2) |> 
+  rename(
+    borough = neighbourhood_group,
+    neighborhood = neighbourhood
+  ) |> 
+  filter(borough != "Staten Island") |> 
+  select(price, stars, borough, neighborhood, room_type)
+```
+
+
+# Fit a model 
+
+```{r}
+nyc_airbnb |> 
+  ggplot(aes(x = stars, y = price, color = borough)) +
+  geom_point()
+```
+
+Let's fit a model we care about. 
+Fit price against stars and borough 
+
+```{r}
+fit = lm(price ~ stars + borough, data = nyc_airbnb)
+```
+
+Let's look at the result 
+```{r eval = FALSE}
+fit
+summary(fit)
+summary(fit)$coef
+coef(fit)
+
+```
+
+Let's look at the result better 
+broom::glance() gives you some of the more useful stats in a tibble
+broom::tidy() gives a whole df. 
+stars is the reference group. For every 1 unit increase in stars (implicit neighborhood = the bronx), we expect the price of the room to go up 32 dollars keep the borough fixed.
+```{r}
+broom::glance(fit)
+
+broom::tidy(fit) |> 
+  select(-std.error, -statistic) |> 
+  mutate(
+    term = str_replace(term, "borough", "Borough: ")
+  ) |> 
+  knitr::kable(digits = 3)
+```
+
+## Be in control of factors
+Factor borough and room type based on frequency
+```{r}
+nyc_airbnb = 
+  nyc_airbnb |> 
+  mutate(
+    borough = fct_infreq(borough),
+    room_type = fct_infreq(room_type)
+  )
+```
+
+Make a plot. Now the x-axis is ordered by the frequency 
+```{r}
+nyc_airbnb |> 
+  ggplot(aes(x = stars, y = price, color = borough)) +
+  geom_point()
+```
+
+Refit model. Now the reference group is Manhattan. It hasn't substantially changed what is happening. 
+
+```{r}
+fit = lm(price ~ stars + borough, data = nyc_airbnb)
+
+broom::tidy(fit)
+```
+
