@@ -174,3 +174,71 @@ broom::tidy(fit)
     ## 3 boroughBrooklyn    -49.8      2.23    -22.3  6.32e-109
     ## 4 boroughQueens      -77.0      3.73    -20.7  2.58e- 94
     ## 5 boroughBronx       -90.3      8.57    -10.5  6.64e- 26
+
+## Diagnostics
+
+Use modelr to add a column for the residuals Distribution of residuals
+for each neighborhood. It looks like the distribution of residuals is
+quite skewed. We’ve got outliers.
+
+Queens has 1 outlier.
+
+``` r
+nyc_airbnb |> 
+  modelr::add_residuals(fit) |> 
+  ggplot(aes(x = borough, y = resid)) +
+  geom_violin() 
+```
+
+    ## Warning: Removed 9962 rows containing non-finite outside the scale range
+    ## (`stat_ydensity()`).
+
+![](linear_models_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+
+``` r
+nyc_airbnb |> 
+  modelr::add_residuals(fit) |> 
+  ggplot(aes(x = stars, y = resid)) +
+  geom_point() +
+  facet_wrap(. ~ borough)
+```
+
+    ## Warning: Removed 9962 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
+
+![](linear_models_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->
+
+# Hypothesis tests
+
+Ask whether the predicotr as a whole is signfiicant in the context of
+the model?
+
+``` r
+fit |> 
+  broom::tidy()
+```
+
+    ## # A tibble: 5 × 5
+    ##   term            estimate std.error statistic   p.value
+    ##   <chr>              <dbl>     <dbl>     <dbl>     <dbl>
+    ## 1 (Intercept)         19.8     12.2       1.63 1.04e-  1
+    ## 2 stars               32.0      2.53     12.7  1.27e- 36
+    ## 3 boroughBrooklyn    -49.8      2.23    -22.3  6.32e-109
+    ## 4 boroughQueens      -77.0      3.73    -20.7  2.58e- 94
+    ## 5 boroughBronx       -90.3      8.57    -10.5  6.64e- 26
+
+What about the significance of `borough`? Do f-test or ANOVA
+
+``` r
+fit_null = lm(price ~ stars, data = nyc_airbnb)
+fit_alt = lm(price ~ stars + borough, data = nyc_airbnb)
+
+anova(fit_null, fit_alt) |> 
+  broom::tidy()
+```
+
+    ## # A tibble: 2 × 7
+    ##   term                    df.residual     rss    df   sumsq statistic    p.value
+    ##   <chr>                         <dbl>   <dbl> <dbl>   <dbl>     <dbl>      <dbl>
+    ## 1 price ~ stars                 30528  1.03e9    NA NA            NA  NA        
+    ## 2 price ~ stars + borough       30525  1.01e9     3  2.53e7      256.  7.84e-164
