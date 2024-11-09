@@ -242,3 +242,73 @@ anova(fit_null, fit_alt) |>
     ##   <chr>                         <dbl>   <dbl> <dbl>   <dbl>     <dbl>      <dbl>
     ## 1 price ~ stars                 30528  1.03e9    NA NA            NA  NA        
     ## 2 price ~ stars + borough       30525  1.01e9     3  2.53e7      256.  7.84e-164
+
+## Nest data, fit models
+
+Is there an association by stars and price and does it vary by borough?
+What about room_type? Does room type have a bigger effect in one borough
+compared to others?
+
+Fit an interaction.
+
+This is pretty formal and more complex
+
+``` r
+fit = 
+  lm(price ~ stars * borough + room_type * borough, data = nyc_airbnb) |> 
+  broom::tidy()
+```
+
+This is exploratory but maybe easier to understand. Nesting makes it
+easier to understand
+
+``` r
+nyc_airbnb |> 
+  nest(data = -borough) |> 
+  mutate(
+    models = map(.x = data, ~lm(price ~ stars + room_type, data = .x)),
+    results = map(models, broom::tidy)
+  ) |>
+  select(-data, -models) |> 
+  unnest(results) |> 
+  filter(term != "(Intercept") |> 
+  select(borough, term, estimate) |> 
+  pivot_wider(
+    names_from = borough,
+    values_from = estimate
+  )
+```
+
+    ## # A tibble: 4 × 5
+    ##   term                   Bronx Queens Brooklyn Manhattan
+    ##   <chr>                  <dbl>  <dbl>    <dbl>     <dbl>
+    ## 1 (Intercept)            90.1   91.6      69.6      95.7
+    ## 2 stars                   4.45   9.65     21.0      27.1
+    ## 3 room_typePrivate room -52.9  -69.3     -92.2    -124. 
+    ## 4 room_typeShared room  -70.5  -95.0    -106.     -154.
+
+More nesting. If you want to look at room type and stars in the context
+of neighborhood in manhattan. Nest everything but neighborhood. You get
+a listcol of other variables.
+
+``` r
+nyc_airbnb |> 
+  filter(borough == "Manhattan") |> 
+  nest(data = -neighborhood) |> 
+  mutate(
+    models = map(.x = data, ~lm(price ~ stars + room_type, data = .x)),
+    results = map(models, broom::tidy)
+  ) |>
+  select(-data, -models) |> 
+  unnest(results) |> 
+  filter(str_detect(term, "room_type")) |> 
+  ggplot(aes(x = neighborhood, y = estimate)) +
+  geom_point() +
+  facet_wrap(. ~ term) +
+  theme(axis.text.x = element_text(angle = 90, vjust = -0.5, hjust = 1))
+```
+
+![](linear_models_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
+
+If we’re keep stars fixed, you’re saving x amounts of money if you stay
+in a private/shared room compared to an entire apartment.
