@@ -75,7 +75,10 @@ ggplot(train_df, aes(x = range, y = logratio)) +
 ```
 
 Fit three models. 
+gam() would give you a smooth fit.
+s(range) is analogous to using polynomials but polynomials are numerically. Collection of smooth function that captures non-linearity. 
 
+s(range, k = 30) uses more functions than default. sp = 10e-6 (smoothing parameter) is set arbitrarily small which will overfit 
 ```{r}
 linear_model = lm(logratio ~ range, data = train_df)
 
@@ -127,6 +130,144 @@ rmse(smooth_model, test_df)
 Is this difference in RMSE between wiggly and smooth consistent?
 
 ```{r}
+cv_df = 
+  crossv_mc(lidar_df, 100) |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+```
 
+Fit linear models to all 100 training datasets. Extract RMSE. DO the same thing for swiggly and smooth models
+
+```{r}
+cv_res_df = 
+  cv_df |> 
+  mutate(
+    linear_model = map(train, \(x) lm(logratio ~ range, data = x)),
+    smooth_model = map(train, \(x) gam(logratio ~ s(range), data = x)),
+    swiggly_model = map(train, \(x) gam(logratio ~ s(range, k = 30), sp = 10e-6, data = x))
+  ) |> 
+  mutate(
+    rmse_linear = map2_dbl(linear_model, test, rmse),
+    rmse_smooth = map2_dbl(smooth_model, test, rmse),
+    rmse_swiggly = map2_dbl(swiggly_model, test, rmse)
+  )
+  
+```
+
+Look at RMSE distribution 
+
+```{r}
+cv_res_df |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = ("rmse_")
+  ) |> 
+  ggplot(aes(x = model, y = rmse)) +
+  geom_violin()
+```
+
+## Nepalese children Df
+
+```{r}
+child_df =
+  read_csv("data/nepalese_children.csv") |> 
+  mutate(
+    weight_ch7 = (weight > 7) *(weight -7) #when weight is less than 7, set it equal to 0
+  )
+
+```
+
+Look at data
+
+```{r}
+child_df |> 
+  ggplot(aes(x = weight, y = armc)) +
+  geom_point(alpha = .5)
+```
+
+
+Fit some models 
+
+```{r}
+linear_model = lm(armc ~ weight, data = child_df)
+pwl_model = lm(armc ~ weight + weight_ch7, data = child_df)
+smooth_model = gam(armc ~ s(weight), data = child_df)
+```
+
+
+Look at models
+Linear model looks ok but not capturing the head and tail part of the data. 
+```{r}
+child_df |>  
+  add_predictions(linear_model) |> 
+  ggplot(aes(x = weight, y = armc)) +
+  geom_point(alpha = 0.5) +
+  geom_line(aes(y = pred), color = "red")
+```
+
+
+Piece wise model - changes slope at weight = 7
+
+```{r}
+child_df |>  
+  add_predictions(pwl_model) |> 
+  ggplot(aes(x = weight, y = armc)) +
+  geom_point(alpha = 0.5) +
+  geom_line(aes(y = pred), color = "red")
+```
+
+Smooth model. You can't tell the correlation coefficient from a 
+```{r}
+child_df |>  
+  add_predictions(smooth_model) |> 
+  ggplot(aes(x = weight, y = armc)) +
+  geom_point(alpha = 0.5) +
+  geom_line(aes(y = pred), color = "red")
+```
+
+
+CV to select models 
+
+```{r}
+cv_df =
+  crossv_mc(child_df, 100) |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  ) 
+```
+
+Apply models to extract RMSE
+```{r}
+cv_res_df =
+  cv_df |> 
+  mutate(
+    linear_model = map(train, \(x) lm(armc ~ weight, data = x)),
+    pwl_model = map(train, \(x) lm(armc ~ weight + weight_ch7, data = x)),
+    smooth_model = map(train, \(x) gam(armc ~ s(weight), data = x))
+  ) |> 
+  mutate(
+    rmse_linear = map2_dbl(linear_model, test, rmse),
+    rmse_pwl = map2_dbl(pwl_model, test, rmse),
+    rmse_smooth = map2_dbl(smooth_model, test, rmse)
+  )
+```
+
+```{r}
+cv_res_df |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = ("rmse_")
+  ) |> 
+  ggplot(aes(x = model, y = rmse)) +
+  geom_violin()
 ```
 
